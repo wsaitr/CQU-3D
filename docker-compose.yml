@@ -129,6 +129,11 @@ services:
         condition: service_healthy
       dispatcher:
         condition: service_started
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
     restart: unless-stopped
 
 volumes:
