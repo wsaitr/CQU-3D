@@ -1,3 +1,14 @@
+# =============================================================================
+# CQU3D — 本地开发模式（单机 docker compose）
+# =============================================================================
+# 热更新: api/dispatcher/worker 的 Python 代码通过 volume 挂载到容器，
+# 修改后只需 `docker compose restart <service>`，无需重建镜像。
+#
+# 生产部署请使用 deploy/ 下的分离部署方案:
+#   - 代码通过 Dockerfile COPY 到镜像内，不依赖 host 文件
+#   - CPU 侧:  deploy/cpu/docker-compose.cpu.yml  + deploy/cpu/.env.cpu
+#   - GPU 侧:  deploy/gpu/docker-compose.gpu.yml  + deploy/gpu/.env.gpu
+# =============================================================================
 services:
   mysql:
     image: mysql:8.0
@@ -61,6 +72,8 @@ services:
       PYTHONPATH: /workspace/repo
     volumes:
       - ./storage:/workspace/repo/storage
+      - ./apps/api:/workspace/repo/apps/api:ro
+      - ./packages/shared:/workspace/repo/packages/shared:ro
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -88,9 +101,8 @@ services:
       PYTHONPATH: /workspace/repo
     volumes:
       - ./storage:/workspace/repo/storage
-      - ./packages/shared/repository.py:/workspace/repo/packages/shared/repository.py:ro
-      - ./packages/shared/task_queue.py:/workspace/repo/packages/shared/task_queue.py:ro
-      - ./apps/dispatcher/main.py:/workspace/repo/apps/dispatcher/main.py:ro
+      - ./apps/dispatcher:/workspace/repo/apps/dispatcher:ro
+      - ./packages/shared:/workspace/repo/packages/shared:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -105,7 +117,7 @@ services:
       context: .
       dockerfile: infra/docker/worker.Dockerfile
       additional_contexts:
-        dynamic2dgs: ./dynamic-2dgs
+        dynamic2dgs: ../dynamic-2dgs
         wheelhouse: ../whl
     env_file:
       - .env
@@ -120,8 +132,9 @@ services:
       CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
     volumes:
       - ./storage:/workspace/repo/storage
-      - ./packages/shared/task_queue.py:/workspace/repo/packages/shared/task_queue.py:ro
-      - ./dynamic-2dgs:/workspace/repo/services/dynamic-2dgs
+      - ./apps/worker:/workspace/repo/apps/worker:ro
+      - ./packages/shared:/workspace/repo/packages/shared:ro
+      - ../dynamic-2dgs:/workspace/repo/services/dynamic-2dgs
     depends_on:
       mysql:
         condition: service_healthy

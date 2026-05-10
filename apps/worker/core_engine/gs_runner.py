@@ -69,16 +69,26 @@ class GSRunner:
         )
 
         if process.stdout:
+            buf = b""
             while True:
-                line_bytes = await process.stdout.readline()
-                if not line_bytes:
+                chunk = await process.stdout.read(65536)
+                if not chunk:
                     break
-                line = line_bytes.decode("utf-8", errors="replace").strip()
-                if not line:
-                    continue
-                logger.info(line)
-                if on_line:
-                    await self._maybe_await(on_line(line))
+                buf += chunk
+                while b"\n" in buf:
+                    raw_line, buf = buf.split(b"\n", 1)
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if line:
+                        logger.info(line)
+                        if on_line:
+                            await self._maybe_await(on_line(line))
+                # flush remaining progress-bar output that has no newline
+                if not chunk and buf.strip():
+                    line = buf.decode("utf-8", errors="replace").strip()
+                    if line:
+                        logger.info(line)
+                        if on_line:
+                            await self._maybe_await(on_line(line))
 
         return await process.wait()
 
