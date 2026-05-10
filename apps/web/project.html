@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程详情 - CQU3D 平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="dashboard.html">CQU3D 控制台</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 id="project-name">加载中...</h2>
+                <p id="project-desc" class="text-muted"></p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>上传素材</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="upload-form">
+                            <div class="mb-3">
+                                <input type="file" id="file-input" class="form-control" multiple required>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="upload-btn">上传</button>
+                        </form>
+                        <div id="upload-progress-container" class="mt-3 hidden">
+                            <div class="progress mb-1">
+                                <div id="upload-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small id="upload-status-text" class="text-muted"></small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5>素材列表</h5>
+                    </div>
+                    <ul id="asset-list" class="list-group list-group-flush">
+                    </ul>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>加工任务</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="mb-3 text-start">
+                            <label for="task-mode" class="form-label">任务模式</label>
+                            <select id="task-mode" class="form-select">
+                                <option value="both" selected>3DGS + Mesh</option>
+                                <option value="3dgs">仅 3DGS</option>
+                                <option value="mesh">仅 Mesh</option>
+                            </select>
+                        </div>
+                        <button id="process-btn" class="btn btn-success mb-3">开始加工</button>
+
+                        <div id="process-progress-container" class="mt-2 hidden">
+                            <div class="progress mb-2">
+                                <div id="process-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <div id="process-status" class="fw-bold text-muted">准备就绪</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="result-container">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/project.js"></script>
+</body>
+</html>

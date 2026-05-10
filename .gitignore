@@ -1,0 +1,49 @@
+# ====== 敏感信息 & 环境配置 ======
+.env
+deploy/cpu/.env.cpu
+deploy/gpu/.env.gpu
+*.env.local
+*.env.production
+
+# ====== 运行时数据 ======
+storage/input/*
+storage/output/*
+storage/workspace/*
+storage/logs/*
+storage/input/users/
+!storage/input/.gitkeep
+!storage/output/.gitkeep
+!storage/workspace/.gitkeep
+!storage/logs/.gitkeep
+
+# ====== 任务临时文件 ======
+.last_task_id.txt
+
+# ====== Python ======
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+*.so
+
+# ====== 预编译包 ======
+*.whl
+*.tar.gz
+*.zip
+infra/docker/wheels/
+
+# ====== IDE & OS ======
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ====== Docker ======
+deploy/cpu/images/
+deploy/gpu/images/

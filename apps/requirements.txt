@@ -1,0 +1,13 @@
+aiofiles==23.2.1
+aiomysql==0.2.0
+email-validator==2.2.0
+fastapi==0.115.6
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.20
+redis[hiredis]==5.2.1
+sqlalchemy[asyncio]==2.0.36
+uvicorn[standard]==0.34.0

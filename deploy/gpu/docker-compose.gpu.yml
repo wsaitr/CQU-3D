@@ -1,0 +1,62 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "10"
+
+services:
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+      additional_contexts:
+        dynamic2dgs: ../../dynamic-2dgs
+        wheelhouse: ../../../whl
+    env_file:
+      - ./.env.gpu
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_URL: ${MYSQL_URL}
+      REDIS_URL: ${REDIS_URL}
+      PYTHONPATH: /workspace/repo
+      STORAGE_ROOT: /workspace/repo/storage
+      INPUT_DIR: /workspace/repo/storage/input
+      WORKSPACE_DIR: /workspace/repo/storage/workspace
+      OUTPUT_DIR: /workspace/repo/storage/output
+      LOG_DIR: /workspace/repo/storage/logs
+      DYNAMIC_2DGS_ROOT: /workspace/repo/services/dynamic-2dgs
+      WORKER_ID: ${WORKER_ID}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+      TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-8.0;8.6;8.9}
+    volumes:
+      - ${HOST_STORAGE_ROOT}:/workspace/repo/storage
+    healthcheck:
+      test: ["CMD", "python", "/workspace/repo/apps/worker/healthcheck.py"]
+      interval: 20s
+      timeout: 8s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 2m
+    labels:
+      autoheal: "true"
+    logging: *default-logging
+    gpus: all
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 20
+      CURL_TIMEOUT: 10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    logging: *default-logging

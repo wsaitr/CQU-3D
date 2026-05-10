@@ -1,0 +1,3 @@
+[submodule "dynamic-2dgs"]
+	path = dynamic-2dgs
+	url = https://github.com/hustvl/dynamic-2dgs.git

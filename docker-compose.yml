@@ -1,0 +1,136 @@
+services:
+  mysql:
+    image: mysql:8.0
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-repo_db}
+      MYSQL_USER: ${MYSQL_USER:-repo_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me_app}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u${MYSQL_USER:-repo_user}", "-p${MYSQL_PASSWORD:-change_me_app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ./apps/web:/usr/share/nginx/html:ro
+      - ./infra/docker/web.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    env_file:
+      - .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /workspace/repo
+    volumes:
+      - ./storage:/workspace/repo/storage
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  dispatcher:
+    build:
+      context: .
+      dockerfile: infra/docker/dispatcher.Dockerfile
+    env_file:
+      - .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /workspace/repo
+    volumes:
+      - ./storage:/workspace/repo/storage
+      - ./packages/shared/repository.py:/workspace/repo/packages/shared/repository.py:ro
+      - ./packages/shared/task_queue.py:/workspace/repo/packages/shared/task_queue.py:ro
+      - ./apps/dispatcher/main.py:/workspace/repo/apps/dispatcher/main.py:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/worker.Dockerfile
+      additional_contexts:
+        dynamic2dgs: ./dynamic-2dgs
+        wheelhouse: ../whl
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /workspace/repo
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_URL: redis://redis:6379/0
+      DYNAMIC_2DGS_ROOT: /workspace/repo/services/dynamic-2dgs
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+    volumes:
+      - ./storage:/workspace/repo/storage
+      - ./packages/shared/task_queue.py:/workspace/repo/packages/shared/task_queue.py:ro
+      - ./dynamic-2dgs:/workspace/repo/services/dynamic-2dgs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      dispatcher:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:

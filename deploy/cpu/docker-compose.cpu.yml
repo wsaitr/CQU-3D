@@ -1,0 +1,168 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "10"
+
+services:
+  mysql:
+    image: mysql:8.0
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../../infra/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${MYSQL_PUBLIC_PORT:-3306}:3306"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-u${MYSQL_USER}",
+          "-p${MYSQL_PASSWORD}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    logging: *default-logging
+
+  redis:
+    image: redis:7.2-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "${REDIS_PUBLIC_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    logging: *default-logging
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    env_file:
+      - ./.env.cpu
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ROOT: /workspace/repo/storage
+      INPUT_DIR: /workspace/repo/storage/input
+      WORKSPACE_DIR: /workspace/repo/storage/workspace
+      OUTPUT_DIR: /workspace/repo/storage/output
+      LOG_DIR: /workspace/repo/storage/logs
+      PYTHONPATH: /workspace/repo
+    volumes:
+      - ${HOST_STORAGE_ROOT}:/workspace/repo/storage
+    ports:
+      - "${API_PUBLIC_PORT:-8000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    logging: *default-logging
+
+  dispatcher:
+    build:
+      context: ../..
+      dockerfile: infra/docker/dispatcher.Dockerfile
+    env_file:
+      - ./.env.cpu
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ROOT: /workspace/repo/storage
+      INPUT_DIR: /workspace/repo/storage/input
+      WORKSPACE_DIR: /workspace/repo/storage/workspace
+      OUTPUT_DIR: /workspace/repo/storage/output
+      LOG_DIR: /workspace/repo/storage/logs
+      PYTHONPATH: /workspace/repo
+    volumes:
+      - ${HOST_STORAGE_ROOT}:/workspace/repo/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "/workspace/repo/apps/dispatcher/healthcheck.py"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    logging: *default-logging
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    env_file:
+      - ./.env.cpu
+    ports:
+      - "${WEB_PUBLIC_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    logging: *default-logging
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 20
+      CURL_TIMEOUT: 10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  mysql_data:
+  redis_data:
