@@ -371,32 +371,34 @@ class GSRunner:
         model_base_dir: Path,
         on_progress: ProgressCallback,
     ) -> None:
-        cmd = [
-            str(self.paths["python"]),
-            str(self.paths["repo"] / "render_mesh.py"),
-            "--source_path",
-            str(source_dir),
-            "--model_path",
-            str(model_base_dir),
-            "--deform_type",
-            config.D2DGS_DEFORM_TYPE,
-            "--resolution",
-            str(config.D2DGS_RESOLUTION),
-            "--voxel_size",
-            str(config.D2DGS_VOXEL_SIZE),
-            "--depth_trunc",
-            str(config.D2DGS_DEPTH_TRUNC),
-            "--num_cluster",
-            str(config.D2DGS_NUM_CLUSTER),
-            "--mesh_res",
-            str(config.D2DGS_MESH_RES),
-        ]
-        if config.D2DGS_EVAL:
-            cmd.append("--eval")
-        if not config.D2DGS_RENDER_IMAGES:
-            cmd.extend(["--skip_train", "--skip_test"])
-        if config.D2DGS_UNBOUNDED_MESH:
-            cmd.append("--unbounded")
+        def _build_cmd(voxel_size: float, depth_trunc: float, num_cluster: int, mesh_res: int) -> list[str]:
+            cmd = [
+                str(self.paths["python"]),
+                str(self.paths["repo"] / "render_mesh.py"),
+                "--source_path",
+                str(source_dir),
+                "--model_path",
+                str(model_base_dir),
+                "--deform_type",
+                config.D2DGS_DEFORM_TYPE,
+                "--resolution",
+                str(config.D2DGS_RESOLUTION),
+                "--voxel_size",
+                str(voxel_size),
+                "--depth_trunc",
+                str(depth_trunc),
+                "--num_cluster",
+                str(num_cluster),
+                "--mesh_res",
+                str(mesh_res),
+            ]
+            if config.D2DGS_EVAL:
+                cmd.append("--eval")
+            if not config.D2DGS_RENDER_IMAGES:
+                cmd.extend(["--skip_train", "--skip_test"])
+            if config.D2DGS_UNBOUNDED_MESH:
+                cmd.append("--unbounded")
+            return cmd
 
         mesh_count = 0
 
@@ -407,12 +409,39 @@ class GSRunner:
                 progress = min(95, 82 + mesh_count)
                 await self._notify(on_progress, "running", progress, "Extracting mesh")
 
+        voxel_size = config.D2DGS_VOXEL_SIZE
+        depth_trunc = config.D2DGS_DEPTH_TRUNC
+        num_cluster = config.D2DGS_NUM_CLUSTER
+        mesh_res = config.D2DGS_MESH_RES
+
         exit_code = await self.stream_subprocess(
-            cmd=cmd,
+            cmd=_build_cmd(voxel_size, depth_trunc, num_cluster, mesh_res),
             cwd=self.paths["repo"],
             env=self._subprocess_env(),
             on_line=on_line,
         )
+
+        if exit_code != 0:
+            logger.warning(
+                "Mesh first attempt failed (exit=%s), retrying with reduced params: "
+                "voxel=%.4f depth=%.1f cluster=%s res=%s",
+                exit_code, voxel_size * 2, depth_trunc * 0.5, max(num_cluster // 2, 10), max(mesh_res // 2, 256),
+            )
+            await self._notify(on_progress, "running", 83, "Mesh OOM, retrying with reduced memory")
+
+            mesh_count = 0
+            exit_code = await self.stream_subprocess(
+                cmd=_build_cmd(
+                    voxel_size=voxel_size * 2,
+                    depth_trunc=depth_trunc * 0.5,
+                    num_cluster=max(num_cluster // 2, 10),
+                    mesh_res=max(mesh_res // 2, 256),
+                ),
+                cwd=self.paths["repo"],
+                env=self._subprocess_env(),
+                on_line=on_line,
+            )
+
         if exit_code != 0:
             raise RuntimeError(f"Mesh extraction failed with exit code {exit_code}")
 
