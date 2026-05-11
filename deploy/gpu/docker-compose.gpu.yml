@@ -10,7 +10,7 @@ services:
       context: ../..
       dockerfile: infra/docker/worker.Dockerfile
       additional_contexts:
-        dynamic2dgs: ../../../dynamic-2dgsdynamic-2dgs
+        dynamic2dgs: ../../../dynamic-2dgs
         wheelhouse: ../../../whl
     env_file:
       - ./.env.gpu
